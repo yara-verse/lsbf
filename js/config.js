@@ -4,6 +4,6 @@
 // makes sure each signed-in student can only read and write their own data.
 // Leave these empty to run the app without sign-in (data stays in the browser).
 window.LSBF_CONFIG = {
-  supabaseUrl: "",
+  supabaseUrl: "https://gvmysfuigzpaxzkefuou.supabase.co",
   supabaseAnonKey: ""
 };
