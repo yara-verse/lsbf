@@ -5,5 +5,5 @@
 // Leave these empty to run the app without sign-in (data stays in the browser).
 window.LSBF_CONFIG = {
   supabaseUrl: "https://gvmysfuigzpaxzkefuou.supabase.co",
-  supabaseAnonKey: ""
+  supabaseAnonKey: "sb_publishable_APjwYSp4vMhK8ArASzUPDA_6VwHmReu"
 };

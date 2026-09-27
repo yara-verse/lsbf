@@ -1,6 +1,6 @@
 // Offline support: serve the app shell from cache, refresh it in the background.
 // Supabase API calls are never cached; they always go to the network.
-const CACHE = "lsbf-advisor-v3";
+const CACHE = "lsbf-advisor-v4";
 const SHELL = ["./", "index.html", "css/styles.css", "js/config.js", "js/data.js", "js/app.js", "manifest.webmanifest", "icon.svg"];
 const CACHEABLE_HOSTS = ["cdn.jsdelivr.net", "fonts.googleapis.com", "fonts.gstatic.com"];
 
