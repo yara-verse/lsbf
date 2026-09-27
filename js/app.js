@@ -33,24 +33,32 @@ let S = load();
 let done = new Set(S.done);
 function save(){
   S.done = [...done];
+  S.savedAt = new Date().toISOString();
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {}
   cloud.push();
+}
+// Replace everything with a saved copy (from a backup or another device).
+function applyState(data){
+  S = { ...defaults(), ...clone(data), settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) } };
+  done = new Set(S.done || []);
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {}
+  render();
 }
 
 /* ---------- sync (when published on claude.ai) ---------- */
 // Keeps a private copy of your data so it follows you between devices.
 const cloud = {
-  ref: null, busy: false, again: false, timer: null,
+  backend: null, busy: false, again: false, timer: null,
   push(){
-    if (!this.ref) return;
+    if (!this.backend) return;
     clearTimeout(this.timer);
     this.timer = setTimeout(() => this.flush(), 600);
   },
   async flush(){
     if (this.busy){ this.again = true; return; }
     this.busy = true;
-    try { await this.ref.set(clone({ ...S, savedAt: new Date().toISOString() })); }
-    catch(e) { if (e && e.code === "invalid_argument") this.ref = null; }
+    try { await this.backend.save(clone(S)); }
+    catch(e) { if (this.backend && this.backend.failed) this.backend.failed(e); }
     this.busy = false;
     if (this.again){ this.again = false; this.flush(); }
   }
@@ -68,15 +76,12 @@ async function connect(){
     const snap = await ref.get();
     if (snap.exists){
       const data = snap.data();
-      if (data && Array.isArray(data.items)){
-        S = { ...defaults(), ...clone(data), settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) } };
-        delete S.savedAt;
-        done = new Set(S.done || []);
-        try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {}
-        render();
-      }
+      if (data && Array.isArray(data.items)) applyState(data);
     }
-    cloud.ref = ref;
+    cloud.backend = {
+      save: d => ref.set(d),
+      failed: e => { if (e && e.code === "invalid_argument") cloud.backend = null; }
+    };
     $("syncNote").textContent = "Your ticks, hours and marks sync to your account, so they follow you between devices.";
   } catch(e) {}
 }
@@ -585,6 +590,88 @@ document.addEventListener("click", e => {
   }
 });
 
+/* ---------- Supabase sync (self-hosted version) ---------- */
+// Sign in with an emailed link; your data is kept in the advisor_state table.
+const SYNC_KEY = "lsbf-advisor-sync";
+let sb = null, sbUser = null;
+const syncMeta = {
+  get(){ try { return JSON.parse(localStorage.getItem(SYNC_KEY) || "{}"); } catch(e) { return {}; } },
+  set(m){ try { localStorage.setItem(SYNC_KEY, JSON.stringify(m)); } catch(e) {} }
+};
+function renderAccount(msg){
+  if (!sb) return;
+  $("accountPanel").hidden = false;
+  $("accountOut").hidden = !!sbUser;
+  $("accountIn").hidden = !sbUser;
+  if (sbUser) $("accountEmail").textContent = sbUser.email || "your account";
+  const m = syncMeta.get();
+  $("accountStatus").textContent = msg || (sbUser && m.uid === sbUser.id && m.syncedAt
+    ? `Last synced ${new Date(m.syncedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : "");
+  $("syncNote").textContent = sbUser
+    ? "Signed in. Your ticks, hours, marks and edits sync to every device you sign in on."
+    : "Everything you enter is saved in this browser. Sign in under Manage to sync it to your other devices.";
+}
+async function pull(){
+  if (!sb || !sbUser) return;
+  const uid = sbUser.id;
+  const { data, error } = await sb.from("advisor_state").select("data, updated_at").eq("user_id", uid).maybeSingle();
+  if (error){ renderAccount("Couldn't reach Supabase. Your changes are saved on this device and will sync later."); return; }
+  const m = syncMeta.get();
+  const time = v => v ? Date.parse(v) || 0 : 0;
+  const syncedAt = m.uid === uid ? time(m.syncedAt) : 0;
+  cloud.backend = {
+    async save(d){
+      const { error } = await sb.from("advisor_state").upsert({ user_id: uid, data: d, updated_at: d.savedAt || new Date().toISOString() });
+      if (error) throw error;
+      syncMeta.set({ uid, syncedAt: d.savedAt });
+      renderAccount();
+    },
+    failed(){ renderAccount("Couldn't save to Supabase. Your changes are kept on this device and will sync later."); }
+  };
+  if (data && Array.isArray(data.data && data.data.items) && time(data.updated_at) > syncedAt){
+    // Changed on another device since this one last synced: take that copy.
+    applyState(data.data);
+    syncMeta.set({ uid, syncedAt: data.updated_at });
+  } else if (!data || time(S.savedAt) > syncedAt){
+    // First sign-in, or offline edits on this device: upload them.
+    if (!S.savedAt) S.savedAt = new Date().toISOString();
+    await cloud.flush();
+  }
+  renderAccount();
+}
+async function connectSupabase(){
+  const cfg = window.LSBF_CONFIG || {};
+  if (hosted || !cfg.supabaseUrl || !cfg.supabaseAnonKey || !window.supabase) return;
+  sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
+    auth: { flowType: "pkce", persistSession: true, detectSessionInUrl: true, autoRefreshToken: true }
+  });
+  renderAccount();
+  sb.auth.onAuthStateChange((event, session) => {
+    const user = session ? session.user : null;
+    if ((user && user.id) === (sbUser && sbUser.id)) return;
+    sbUser = user;
+    if (!user) cloud.backend = null;
+    renderAccount();
+    // Run outside the auth callback, as supabase-js recommends.
+    if (user) setTimeout(() => pull().then(() => { if (location.search.includes("code=")) history.replaceState(null, "", location.pathname + location.hash); }), 0);
+  });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") pull(); });
+  $("signInForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const email = $("signInEmail").value.trim();
+    if (!email) return;
+    $("signInBtn").disabled = true;
+    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
+    $("signInBtn").disabled = false;
+    const why = error && /fetch|network/i.test(error.message) ? "Couldn't reach Supabase. Check your internet connection and try again." : error && `Couldn't send the link: ${error.message}`;
+    renderAccount(why || `Check ${email} for a sign-in link. Open it on this device.`);
+  });
+  $("signOut").addEventListener("click", async () => {
+    await sb.auth.signOut();
+    toast("Signed out. Your data stays on this device.");
+  });
+}
+
 /* ---------- confirm ---------- */
 function ask(message, okLabel){
   const d = $("confirmDialog");
@@ -682,16 +769,14 @@ async function importBackup(file){
   try {
     const data = JSON.parse(await file.text());
     if (!data || !Array.isArray(data.items) || typeof data.courses !== "object") throw new Error("bad");
-    S = { ...defaults(), ...data, settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) } };
-    done = new Set(S.done || []);
-    save(); render(); toast("Backup restored");
+    applyState(data); save(); toast("Backup restored");
   } catch(e) {
     toast("That file isn't an LSBF Advisor backup.");
   }
 }
 
 /* ---------- boot ---------- */
-route(); render(); connect();
+route(); render(); connect(); connectSupabase();
 if (hosted) $("exportIcs").hidden = true;
 if (!hosted && "serviceWorker" in navigator && location.protocol.startsWith("http")){
   navigator.serviceWorker.register("sw.js").catch(() => {});

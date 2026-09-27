@@ -97,6 +97,22 @@
 
   <!-- MANAGE -->
   <main id="view-manage" class="view" hidden>
+    <div class="panel" id="accountPanel" hidden>
+      <h2>Sync across devices</h2>
+      <div id="accountOut">
+        <p class="hint">Sign in with your email to keep your ticks, hours and marks the same on your phone and laptop. We'll email you a link, so there's no password.</p>
+        <form id="signInForm" class="btn-row">
+          <input type="email" id="signInEmail" class="text-input" placeholder="you@example.com" autocomplete="email" required aria-label="Email address">
+          <button class="btn" id="signInBtn" type="submit">Email me a sign-in link</button>
+        </form>
+      </div>
+      <div id="accountIn" hidden>
+        <p class="hint">Signed in as <b id="accountEmail"></b>.</p>
+        <div class="btn-row"><button class="btn ghost" id="signOut" type="button">Sign out</button></div>
+      </div>
+      <p class="hint" id="accountStatus" aria-live="polite"></p>
+    </div>
+
     <div class="panel">
       <div class="section-head"><h2>Assessments</h2><button class="btn" id="addItem">Add assessment</button></div>
       <div id="manageList" class="manage-list"></div>
@@ -149,6 +165,8 @@
   </div>
 </dialog>
 
+<script src="js/config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="js/data.js"></script>
 <script src="js/app.js"></script>
 </body>

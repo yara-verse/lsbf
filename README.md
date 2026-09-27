@@ -17,9 +17,22 @@ python3 -m http.server 5173
 
 Then open http://localhost:5173.
 
+## Put it online with Supabase sync
+
+The app is hosted on GitHub Pages, and Supabase stores your data and handles sign-in (an emailed link, no password). You do steps 1 to 3 once.
+
+1. **Create the database table.** In your Supabase project, open **SQL Editor → New query**, paste in [`supabase/schema.sql`](supabase/schema.sql) and click **Run**. It creates the `advisor_state` table with row level security, so each person can only see their own data.
+2. **Connect the app.** In Supabase, open **Project Settings → API**. Copy the **Project URL** and the **anon public** key into [`js/config.js`](js/config.js). The anon key is safe to publish; never use the `service_role` key here.
+3. **Turn on hosting.** Push to `main`, then on GitHub open **Settings → Pages** and set **Source** to **GitHub Actions**. The workflow in `.github/workflows/pages.yml` publishes the site to `https://yara-verse.github.io/lsbf/`.
+4. **Allow the sign-in link to come back to the app.** In Supabase, open **Authentication → URL Configuration**. Set **Site URL** to `https://yara-verse.github.io/lsbf/` and add the same address under **Redirect URLs**. Add `http://localhost:5173/` too if you want to sign in while testing locally.
+
+Then open the site on your phone, go to **Manage → Sync across devices**, enter your email and open the link on the same phone. Use **Add to Home Screen** to install it like an app.
+
+GitHub Pages needs a public repository on a free GitHub plan. If you'd rather keep the repo private, Netlify or Vercel can host the same files for free; point them at this folder with no build command.
+
 ## Your data
 
-The default deadlines are in `js/data.js`. Anything you change in the app (ticks, logged hours, marks, edits) is saved in your browser's local storage. Use **Manage → Download backup** to move it to another device.
+The default deadlines are in `js/data.js`. Anything you change in the app (ticks, logged hours, marks, edits) is saved in your browser. When you're signed in, it's also saved to Supabase and synced to every device you sign in on. If two devices change things while offline, the one that syncs last wins. Use **Manage → Download backup** for a copy of your own.
 
 ## How the plan works
 
