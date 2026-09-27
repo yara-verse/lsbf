@@ -1,5 +1,5 @@
 // Offline support: serve the app shell from cache, refresh it in the background.
-const CACHE = "lsbf-advisor-v1";
+const CACHE = "lsbf-advisor-v2";
 const SHELL = ["./", "index.html", "css/styles.css", "js/data.js", "js/app.js", "manifest.webmanifest", "icon.svg"];
 
 self.addEventListener("install", e => {

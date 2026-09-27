@@ -10,12 +10,14 @@
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
+    color-scheme:dark;
     --bg:#10151F; --paper:#182030; --ink:#E8EDF5; --muted:#98A3B6; --line:#2A3446; --soft:#1D2638;
     --warn:#F0806F; --warn-bg:#3A1E1D;
     --c1:#7C9CF5; --c2:#41C2AB; --c3:#E6AE45; --c4:#C08BE3;
   }
 }
 :root[data-theme="dark"]{
+  color-scheme:dark;
   --bg:#10151F; --paper:#182030; --ink:#E8EDF5; --muted:#98A3B6; --line:#2A3446; --soft:#1D2638;
   --warn:#F0806F; --warn-bg:#3A1E1D;
   --c1:#7C9CF5; --c2:#41C2AB; --c3:#E6AE45; --c4:#C08BE3;
@@ -239,8 +241,13 @@ dialog h2{font-size:22px;margin-bottom:14px}
   .mrow{grid-template-columns:12px 1fr auto}
   .mrow .dt{grid-column:2;grid-row:2}
   .mrow .nm{grid-column:2;grid-row:1}
-  .mrow .btn{grid-column:3;grid-row:1 / 3}
   .session{grid-template-columns:1fr auto}
   .session .btn{grid-column:1 / 3;justify-self:start}
   .tabs a{padding:9px 8px;font-size:14px}
 }
+.mbtns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+a.btn{text-decoration:none}
+.btn.danger.solid{background:var(--warn);color:var(--paper);border-color:var(--warn)}
+#confirmDialog{width:min(420px,calc(100vw - 32px))}
+#confirmDialog p{margin:0;font-size:16px}
+@media (max-width:640px){ .mrow .mbtns{grid-column:3;grid-row:1 / 3} }

@@ -34,6 +34,51 @@ let done = new Set(S.done);
 function save(){
   S.done = [...done];
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {}
+  cloud.push();
+}
+
+/* ---------- sync (when published on claude.ai) ---------- */
+// Keeps a private copy of your data so it follows you between devices.
+const cloud = {
+  ref: null, busy: false, again: false, timer: null,
+  push(){
+    if (!this.ref) return;
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.flush(), 600);
+  },
+  async flush(){
+    if (this.busy){ this.again = true; return; }
+    this.busy = true;
+    try { await this.ref.set(clone({ ...S, savedAt: new Date().toISOString() })); }
+    catch(e) { if (e && e.code === "invalid_argument") this.ref = null; }
+    this.busy = false;
+    if (this.again){ this.again = false; this.flush(); }
+  }
+};
+let downloads = null;
+const hosted = !!(window.claude && typeof window.claude.use === "function");
+async function connect(){
+  if (!hosted) return;
+  claude.use("downloads").then(d => { downloads = d; }).catch(() => {});
+  try {
+    const [user, db] = await Promise.all([claude.use("user"), claude.use("db")]);
+    const uid = user && await user.id();
+    if (!db || !uid) return;
+    const ref = db.doc(`data/users/${uid}/state`);
+    const snap = await ref.get();
+    if (snap.exists){
+      const data = snap.data();
+      if (data && Array.isArray(data.items)){
+        S = { ...defaults(), ...clone(data), settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) } };
+        delete S.savedAt;
+        done = new Set(S.done || []);
+        try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {}
+        render();
+      }
+    }
+    cloud.ref = ref;
+    $("syncNote").textContent = "Your ticks, hours and marks sync to your account, so they follow you between devices.";
+  } catch(e) {}
 }
 
 let filter = "all", hideDone = false, planAll = false;
@@ -437,13 +482,20 @@ function renderGrades(){
 }
 
 /* ---------- views: manage ---------- */
+function gcalLink(i){
+  const co = course(i.c), ymd = i.date.replace(/-/g, "");
+  const next = iso(addDays(parse(i.date), 1)).replace(/-/g, "");
+  const details = [`${co.name}${co.lecturer ? ", " + co.lecturer : ""}`, `Worth ${i.weight}%`, i.length, i.time && `Due by ${i.time}`, i.pass && `Pass mark ${i.pass}`, i.flag && `Check: ${i.flag}`].filter(Boolean).join("\n");
+  const q = new URLSearchParams({ action: "TEMPLATE", text: `${co.short}: ${i.title}`, dates: `${ymd}/${next}`, details });
+  return `https://calendar.google.com/calendar/render?${q}`;
+}
 function renderManage(){
   $("manageList").innerHTML = items().map(i => `
     <div class="mrow" style="--cc:${cvar(i.c)}">
       <span class="sw"></span>
       <span class="dt">${fmtDay(parse(i.date))} ${parse(i.date).getFullYear()}</span>
       <span class="nm">${esc(i.title)}<span>${esc(course(i.c).short)}, ${esc(i.weight)}%${i.length ? ", " + esc(i.length) : ""}</span></span>
-      <button class="btn small ghost" data-edit="${esc(i.id)}">Edit</button>
+      <span class="mbtns"><a class="btn small ghost" href="${esc(gcalLink(i))}" target="_blank" rel="noopener" aria-label="Add ${esc(i.title)} to Google Calendar">+ Calendar</a><button class="btn small ghost" data-edit="${esc(i.id)}">Edit</button></span>
     </div>`).join("") || `<div class="empty">No assessments. Add one to get started.</div>`;
 }
 
@@ -516,9 +568,9 @@ document.addEventListener("click", e => {
   if (e.target.closest("#exportIcs")){ exportIcs(); return; }
   if (e.target.closest("#exportJson")){ exportJson(); return; }
   if (e.target.closest("#resetAll")){
-    if (confirm("Reset everything to the original deadlines? Your ticks, logged hours, marks and edits will be cleared.")){
-      S = defaults(); done = new Set(); save(); render(); toast("Reset to original data");
-    }
+    ask("Reset everything to the original deadlines? Your ticks, logged hours, marks and edits will be cleared.", "Reset").then(ok => {
+      if (ok){ S = defaults(); done = new Set(); save(); render(); toast("Reset to original data"); }
+    });
     return;
   }
   const j = e.target.closest("[data-jump]");
@@ -532,6 +584,20 @@ document.addEventListener("click", e => {
     el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1400);
   }
 });
+
+/* ---------- confirm ---------- */
+function ask(message, okLabel){
+  const d = $("confirmDialog");
+  $("confirmText").textContent = message;
+  $("confirmOk").textContent = okLabel;
+  d.showModal();
+  return new Promise(resolve => {
+    const done_ = ok => { d.close(); $("confirmOk").onclick = $("confirmCancel").onclick = null; resolve(ok); };
+    $("confirmOk").onclick = () => done_(true);
+    $("confirmCancel").onclick = () => done_(false);
+    d.oncancel = () => resolve(false);
+  });
+}
 
 /* ---------- editor ---------- */
 const dlg = $("editDialog"), form = $("editForm");
@@ -547,12 +613,14 @@ function openEditor(id){
   dlg.showModal();
 }
 $("cancelEdit").addEventListener("click", () => dlg.close());
-$("deleteItem").addEventListener("click", () => {
+$("deleteItem").addEventListener("click", async () => {
   const i = S.items.find(x => x.id === editingId);
-  if (!i || !confirm(`Delete ${i.title}?`)) return;
+  if (!i) return;
+  dlg.close();
+  if (!(await ask(`Delete ${i.title} for ${course(i.c).short}?`, "Delete"))) return;
   S.items = S.items.filter(x => x.id !== editingId);
   done.delete(editingId); delete S.logged[editingId]; delete S.marks[editingId];
-  dlg.close(); save(); render(); toast("Assessment deleted");
+  save(); render(); toast("Assessment deleted");
 });
 form.addEventListener("submit", e => {
   e.preventDefault();
@@ -570,11 +638,17 @@ form.addEventListener("submit", e => {
 });
 
 /* ---------- export / import ---------- */
-function download(name, text, type){
+async function download(name, text, type){
+  if (hosted){
+    if (!downloads){ toast("Downloads aren't available here"); return false; }
+    try { await downloads.save({ filename: name, data: text }); return true; }
+    catch(e) { if (e && e.code !== "declined") toast("Couldn't save the file"); return false; }
+  }
   const url = URL.createObjectURL(new Blob([text], { type }));
   const a = Object.assign(document.createElement("a"), { href: url, download: name });
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return true;
 }
 const icsEsc = s => String(s).replace(/\\/g, "\\\\").replace(/([,;])/g, "\\$1").replace(/\n/g, "\\n");
 function exportIcs(){
@@ -598,12 +672,11 @@ function exportIcs(){
       "END:VEVENT");
   });
   lines.push("END:VCALENDAR");
-  download("lsbf-deadlines.ics", lines.join("\r\n") + "\r\n", "text/calendar");
-  toast("Calendar file downloaded");
+  download("lsbf-deadlines.ics", lines.join("\r\n") + "\r\n", "text/calendar").then(ok => ok && toast("Calendar file downloaded"));
 }
 function exportJson(){
   save();
-  download(`lsbf-advisor-backup-${todayIso}.json`, JSON.stringify(S, null, 2), "application/json");
+  download(`lsbf-advisor-backup-${todayIso}.json`, JSON.stringify(S, null, 2), "application/json").then(ok => ok && toast("Backup saved"));
 }
 async function importBackup(file){
   try {
@@ -613,13 +686,14 @@ async function importBackup(file){
     done = new Set(S.done || []);
     save(); render(); toast("Backup restored");
   } catch(e) {
-    alert("That file isn't an LSBF Advisor backup.");
+    toast("That file isn't an LSBF Advisor backup.");
   }
 }
 
 /* ---------- boot ---------- */
-route(); render();
-if ("serviceWorker" in navigator && location.protocol.startsWith("http")){
+route(); render(); connect();
+if (hosted) $("exportIcs").hidden = true;
+if (!hosted && "serviceWorker" in navigator && location.protocol.startsWith("http")){
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 })();

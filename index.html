@@ -104,7 +104,7 @@
 
     <div class="panel">
       <h2>Calendar and backup</h2>
-      <p class="hint">Add every deadline to Google Calendar, Outlook or Apple Calendar, or save a backup of everything in this app.</p>
+      <p class="hint">Use "+ Calendar" next to an assessment to add it to Google Calendar, download a calendar file for Outlook or Apple Calendar, or save a backup of everything in this app.</p>
       <div class="btn-row">
         <button class="btn" id="exportIcs">Download calendar (.ics)</button>
         <button class="btn ghost" id="exportJson">Download backup</button>
@@ -114,7 +114,7 @@
     </div>
   </main>
 
-  <footer>Everything you enter is saved in this browser only. Use Download backup to move it to another device.</footer>
+  <footer id="syncNote">Everything you enter is saved in this browser only. Use Download backup to move it to another device.</footer>
 </div>
 
 <dialog id="editDialog">
@@ -138,6 +138,15 @@
       <button type="submit" class="btn" value="save">Save</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="confirmDialog">
+  <p id="confirmText"></p>
+  <div class="btn-row end">
+    <span class="spacer"></span>
+    <button type="button" class="btn ghost" id="confirmCancel">Cancel</button>
+    <button type="button" class="btn danger solid" id="confirmOk">Confirm</button>
+  </div>
 </dialog>
 
 <script src="js/data.js"></script>
