@@ -1,0 +1,13 @@
+{
+  "name": "LSBF Advisor",
+  "short_name": "LSBF Advisor",
+  "description": "Assessment deadlines, study plan and grade tracker for LSBF MBA students",
+  "start_url": "./index.html#today",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#EEF1F6",
+  "theme_color": "#141C2B",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

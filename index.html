@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#141C2B">
+<meta name="description" content="LSBF Advisor: assessment deadlines, study plan and grade tracker">
+<title>LSBF Advisor</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="brand">LSBF Advisor</div>
+      <p id="subtitle"></p>
+    </div>
+    <div class="progress" aria-live="polite">
+      <div class="progress-label"><b id="doneCount">0</b> of <span id="totalCount">0</span> submitted</div>
+      <div class="bar"><span id="barFill"></span></div>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Sections">
+    <a href="#today" data-tab="today">Today</a>
+    <a href="#plan" data-tab="plan">Study plan</a>
+    <a href="#grades" data-tab="grades">Grades</a>
+    <a href="#manage" data-tab="manage">Manage</a>
+  </nav>
+
+  <!-- TODAY -->
+  <main id="view-today" class="view" hidden>
+    <section class="next" id="next" aria-live="polite"></section>
+
+    <div class="section-head"><h2>Advice</h2><span id="adviceCount"></span></div>
+    <div class="advice" id="advice"></div>
+
+    <div class="section-head"><h2>Today's focus</h2><span id="todayHours"></span></div>
+    <div id="todayFocus"></div>
+
+    <div class="section-head">
+      <h2 id="calTitle">The crunch</h2>
+      <span>Tap a deadline to jump to it</span>
+    </div>
+    <div class="cal-scroll"><div class="cal" id="cal"></div></div>
+
+    <div class="section-head"><h2>All deadlines</h2></div>
+    <div class="filters" id="filters" role="group" aria-label="Filter by course"></div>
+    <div class="list" id="list"></div>
+
+    <div class="courses" id="courses"></div>
+  </main>
+
+  <!-- PLAN -->
+  <main id="view-plan" class="view" hidden>
+    <div class="panel settings">
+      <h2>Your study time</h2>
+      <p class="hint">The plan fits your remaining work into the hours you have, finishing each piece before its deadline.</p>
+      <div class="form-grid">
+        <label>Weekday hours <input type="number" min="0" max="12" step="0.5" id="setWeekday"></label>
+        <label>Weekend hours <input type="number" min="0" max="16" step="0.5" id="setWeekend"></label>
+        <label>Finish days before deadline <input type="number" min="0" max="7" step="1" id="setBuffer"></label>
+      </div>
+      <div id="planSummary" class="plan-summary"></div>
+    </div>
+
+    <div class="section-head"><h2>Workload by assessment</h2><span>Log time as you go</span></div>
+    <div class="list" id="effort"></div>
+
+    <div class="section-head"><h2>Day-by-day plan</h2><span id="planRange"></span></div>
+    <div id="planDays" class="plan-days"></div>
+  </main>
+
+  <!-- GRADES -->
+  <main id="view-grades" class="view" hidden>
+    <div class="panel settings">
+      <h2>Grade goals</h2>
+      <p class="hint">Enter a mark when you get it back. The advisor works out what you need on the rest of each module.</p>
+      <div class="form-grid">
+        <label>Target for every module
+          <select id="setTarget">
+            <option value="50">Pass, 50%</option>
+            <option value="60">Merit, 60%</option>
+            <option value="70">Distinction, 70%</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div class="grades" id="grades"></div>
+  </main>
+
+  <!-- MANAGE -->
+  <main id="view-manage" class="view" hidden>
+    <div class="panel">
+      <div class="section-head"><h2>Assessments</h2><button class="btn" id="addItem">Add assessment</button></div>
+      <div id="manageList" class="manage-list"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Calendar and backup</h2>
+      <p class="hint">Add every deadline to Google Calendar, Outlook or Apple Calendar, or save a backup of everything in this app.</p>
+      <div class="btn-row">
+        <button class="btn" id="exportIcs">Download calendar (.ics)</button>
+        <button class="btn ghost" id="exportJson">Download backup</button>
+        <label class="btn ghost file-btn">Restore backup<input type="file" id="importJson" accept="application/json,.json"></label>
+        <button class="btn danger" id="resetAll">Reset to original data</button>
+      </div>
+    </div>
+  </main>
+
+  <footer>Everything you enter is saved in this browser only. Use Download backup to move it to another device.</footer>
+</div>
+
+<dialog id="editDialog">
+  <form method="dialog" id="editForm">
+    <h2 id="editTitle">Edit assessment</h2>
+    <div class="form-grid">
+      <label class="wide">Module <select name="c" required></select></label>
+      <label class="wide">Title <input name="title" required maxlength="120"></label>
+      <label>Due date <input name="date" type="date" required></label>
+      <label>Due time <input name="time" placeholder="e.g. 3:00 PM" maxlength="20"></label>
+      <label>Weight (%) <input name="weight" type="number" min="0" max="100" required></label>
+      <label>Pass mark <input name="pass" placeholder="e.g. 50%" maxlength="10"></label>
+      <label class="wide">Length or format <input name="length" placeholder="e.g. 2,000 words" maxlength="80"></label>
+      <label>Estimated hours <input name="hours" type="number" min="1" max="200" step="1" placeholder="auto"></label>
+      <label class="wide">Note to check <input name="flag" placeholder="e.g. Date to be confirmed" maxlength="160"></label>
+    </div>
+    <div class="btn-row end">
+      <button type="button" class="btn danger" id="deleteItem">Delete</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn ghost" id="cancelEdit">Cancel</button>
+      <button type="submit" class="btn" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
